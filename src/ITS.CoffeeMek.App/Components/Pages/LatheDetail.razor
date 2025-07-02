@@ -1,0 +1,270 @@
+@page "/lathes/{MachineId:int}"
+@implements IDisposable
+@using System.Timers
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+@using ApexCharts
+
+@inject ILatheService LatheService
+@inject IMachineService MachineService
+@inject NavigationManager NavigationManager
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="MudBlazor.Color.Primary" Indeterminate="true" />
+    }
+    else if (_machine != null)
+    {
+        <!-- Header Section -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="12">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudGrid AlignItems="Center.Center">
+                        <MudItem xs="12" md="8">
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBackToMachines" />
+                            <MudText Typo="Typo.h4" Component="span" Class="ml-2 mb-2">@_machine.Name</MudText>
+                            <br />
+                            <MudText Typo="Typo.h6" Class="mb-1 ml-12">Site: @_machine.Site?.Name</MudText>
+                            <MudText Typo="Typo.body1" Class="ml-12">Country: @_machine.Site?.Country</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Current Status Section -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="12">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h5" Class="mb-3">Current Status</MudText>
+                    <MudGrid>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Machine State:</MudText>
+                            <MudChip T="string" Color="@GetStateColor()" Size="MudBlazor.Size.Medium" Class="mt-1">
+                                @(_latestTelemetry?.MachineState?.Description ?? "Unknown")
+                            </MudChip>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Rotation Speed:</MudText>
+                            <MudText Typo="Typo.h6">@(_latestTelemetry?.RotationSpeed?.ToString("F0") ?? "N/A") RPM</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Spindle Temperature:</MudText>
+                            <MudText Typo="Typo.h6">@(_latestTelemetry?.SpindleTemperature?.ToString("F1") ?? "N/A") °C</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Last Update:</MudText>
+                            <MudText Typo="Typo.body1">@(_latestTelemetry?.LocalTimeStamp?.ToString("MMM dd, HH:mm") ?? "N/A")</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Lathe Specific Charts -->
+        <MudGrid Class="mb-6">
+            <!-- Rotation Speed Chart -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Rotation Speed Over Time</MudText>
+                    <ApexChart TItem="Lathe" Title="Rotation Speed (RPM)" Height="300" Options="GetChartOptions()">
+                        <ApexPointSeries TItem="Lathe"
+                                         Items="_machineHistory"
+                                         Name="This Machine"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.RotationSpeed.HasValue ? Math.Round(e.RotationSpeed.Value, 2) : (decimal?)null)" />
+                        <ApexPointSeries TItem="Lathe"
+                                         Items="_averageHistory"
+                                         Name="Average All Machines"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.RotationSpeed.HasValue ? Math.Round(e.RotationSpeed.Value, 2) : (decimal?)null)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Spindle Temperature Chart -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Spindle Temperature Over Time</MudText>
+                    <ApexChart TItem="Lathe" Title="Temperature (�C)" Height="300" Options="GetChartOptions()">
+                        <ApexPointSeries TItem="Lathe"
+                                         Items="_machineHistory"
+                                         Name="This Machine"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.SpindleTemperature.HasValue ? Math.Round(e.SpindleTemperature.Value, 2) : (decimal?)null)" />
+                        <ApexPointSeries TItem="Lathe"
+                                         Items="_averageHistory"
+                                         Name="Average All Machines"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.SpindleTemperature.HasValue ? Math.Round(e.SpindleTemperature.Value, 2) : (decimal?)null)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <!-- State Distribution Chart -->
+            <MudItem xs="12">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Machine State Distribution</MudText>
+                    <div style="height: 400px;">
+                        <ApexChart TItem="StateDistribution" Title="Time Spent in Each State" Height="350">
+                            <ApexPointSeries TItem="StateDistribution"
+                                             Items="_stateDistribution"
+                                             Name="Hours"
+                                             SeriesType="SeriesType.Donut"
+                                             XValue="@(e => e.StateName)"
+                                             YValue="@(e => e.Count)" />
+                        </ApexChart>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning">Machine not found or no data available.</MudAlert>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public int MachineId { get; set; }
+
+    private bool _isLoading = true;
+    private Machine? _machine;
+    private Lathe? _latestTelemetry;
+    private List<Lathe> _machineHistory = new();
+    private List<Lathe> _averageHistory = new();
+    private List<StateDistribution> _stateDistribution = new();
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMachineData();
+        _isLoading = false;
+
+        // Setup auto-refresh timer
+        _timer = new Timer(3000); // 3 seconds
+        _timer.Elapsed += async (sender, e) => await OnTimerElapsed();
+        _timer.AutoReset = true;
+        _timer.Start();
+    }
+
+    private async Task OnTimerElapsed()
+    {
+        await LoadMachineData();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadMachineData()
+    {
+        try
+        {
+            // Load machine basic info
+            var machines = await MachineService.GetMachinesAsync();
+            _machine = machines?.FirstOrDefault(m => m.Id == MachineId);
+
+            if (_machine == null) return;
+
+            // Load machine history
+            _machineHistory = (await LatheService.GetLatheHistoryAsync(MachineId))?.ToList() ?? new();
+            _latestTelemetry = _machineHistory.OrderByDescending(h => h.LocalTimeStamp).FirstOrDefault();
+
+            // Load all lathes for average calculation
+            var allMachines = (await LatheService.GetLathesAsync())?.ToList() ?? new();
+
+            // Calculate averages grouped by time periods
+            _averageHistory = CalculateAverageHistory(allMachines);
+
+            // Calculate state distribution
+            _stateDistribution = CalculateStateDistribution(_machineHistory);
+        }
+        catch (Exception ex)
+        {
+            // Handle error - could show in UI
+            Console.WriteLine($"Error loading machine data: {ex.Message}");
+        }
+    }
+
+    private List<Lathe> CalculateAverageHistory(List<Lathe> allMachines)
+    {
+        return allMachines
+            .Where(m => m.LocalTimeStamp.HasValue)
+            .GroupBy(m => new { 
+                Hour = m.LocalTimeStamp.Value.Hour,
+                Minute = m.LocalTimeStamp.Value.Minute / 10 * 10 // Group by 10-minute intervals
+            })
+            .Select(g => new Lathe
+            {
+                LocalTimeStamp = g.First().LocalTimeStamp,
+                RotationSpeed = g.Where(x => x.RotationSpeed.HasValue).Average(x => x.RotationSpeed),
+                SpindleTemperature = g.Where(x => x.SpindleTemperature.HasValue).Average(x => x.SpindleTemperature)
+            })
+            .OrderBy(x => x.LocalTimeStamp)
+            .ToList();
+    }
+
+    private List<StateDistribution> CalculateStateDistribution(List<Lathe> history)
+    {
+        var stateGroups = history
+            .Where(h => h.MachineState != null)
+            .GroupBy(h => h.MachineState!.Description ?? "Unknown")
+            .Select(g => new StateDistribution
+            {
+                StateName = g.Key,
+                Count = g.Count()
+            })
+            .ToList();
+
+        return stateGroups;
+    }
+
+    private MudBlazor.Color GetStateColor()
+    {
+        return _latestTelemetry?.MachineState?.Id switch
+        {
+            1 => MudBlazor.Color.Success, // Operativa
+            2 => MudBlazor.Color.Warning, // In manutenzione
+            3 => MudBlazor.Color.Info,    // Ferma
+            4 => MudBlazor.Color.Error,   // Errore
+            5 => MudBlazor.Color.Default, // Standby
+            6 => MudBlazor.Color.Success, // Test Superato
+            7 => MudBlazor.Color.Error,   // Test Fallito
+            _ => MudBlazor.Color.Default
+        };
+    }
+
+    private void GoBackToMachines()
+    {
+        NavigationManager.NavigateTo("/machines");
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+
+    private ApexChartOptions<Lathe> GetChartOptions()
+    {
+        return new ApexChartOptions<Lathe>()
+        {
+            Xaxis = new()
+            {
+                Type = ApexCharts.XAxisType.Datetime,
+                Labels = new ApexCharts.XAxisLabels
+                {
+                    Format = "HH:mm"
+                }
+            }
+        };
+    }
+
+    private class StateDistribution
+    {
+        public string StateName { get; set; } = "";
+        public int Count { get; set; }
+    }
+}

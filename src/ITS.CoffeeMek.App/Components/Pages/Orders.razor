@@ -1,0 +1,130 @@
+@page "/orders"
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+@inject IOrderService OrderService
+@inject ILotService LotService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<MudGrid Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudItem>
+        <MudText Typo="Typo.h3">Orders</MudText>
+    </MudItem>
+    <MudItem>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreateOrderDialog">Create New Order</MudButton>
+    </MudItem>
+</MudGrid>
+
+@if (_orders == null)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_orders" Hover="true" OnRowClick="(TableRowClickEventArgs<Order> args) => NavigateToOrder(args.Item.Id)" Style="cursor:pointer">
+        <HeaderContent>
+            <MudTh>Order ID</MudTh>
+            <MudTh>Client</MudTh>
+            <MudTh>Quantity</MudTh>
+            <MudTh>Creation Date</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Progress</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Id"><MudLink Href="@($"/orders/{context.Id}")">@context.Id</MudLink></MudTd>
+            <MudTd DataLabel="Client">@(context.Client?.Name ?? "N/A")</MudTd>
+            <MudTd DataLabel="Quantity">@context.Quantity</MudTd>
+            <MudTd DataLabel="Creation Date">@context.CreationTime.ToShortDateString()</MudTd>
+            <MudTd DataLabel="Status">
+                @if (context.FulfillmentTime.HasValue)
+                {
+                    <MudChip T="object" Color="Color.Success">Closed</MudChip>
+                }
+                else
+                {
+                    @if (_orderProgress.TryGetValue(context.Id, out var progress) && progress >= 100)
+                    {
+                        <MudChip T="object" Color="Color.Info">In Progress</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="object" Color="Color.Warning">Open</MudChip>
+                    }
+                }
+            </MudTd>
+            <MudTd DataLabel="Progress">
+                @if (_orderProgress.TryGetValue(context.Id, out var progress))
+                {
+                    <MudProgressCircular Color="@GetProgressColor(progress)" Value="@(Convert.ToInt32(progress))" Size="Size.Medium">
+                        <MudText Style="font-size: 0.8rem;">@($"{progress:F0}%")</MudText>
+                    </MudProgressCircular>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private IEnumerable<Order>? _orders;
+    private Dictionary<int, double> _orderProgress = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _orders = await OrderService.GetOrdersAsync();
+        if (_orders != null)
+        {
+            _orderProgress.Clear();
+            foreach (var order in _orders)
+            {
+                var lots = await LotService.GetLotsByOrderIdAsync(order.Id);
+                var totalLotsQuantity = lots?.Sum(l => l.CurrentQuantity) ?? 0;
+                _orderProgress[order.Id] = order.Quantity > 0 ? ((double)totalLotsQuantity / order.Quantity) * 100 : 0;
+            }
+        }
+    }
+
+    private void NavigateToOrder(int orderId)
+    {
+        NavigationManager.NavigateTo($"/orders/{orderId}");
+    }
+
+    private async Task OpenCreateOrderDialog()
+    {
+        var dialog = await DialogService.ShowAsync<CreateOrderDialog>("Create New Order");
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is CreateOrderDialog.CreateOrderModel newOrderModel)
+        {
+            if (newOrderModel.ClientId.HasValue && newOrderModel.Quantity.HasValue)
+            {
+                var newOrder = new Order
+                {
+                    ClientId = newOrderModel.ClientId!.Value,
+                    Quantity = newOrderModel.Quantity!.Value,
+                    CreationTime = DateTime.UtcNow
+                };
+
+                var createdOrder = await OrderService.AddOrderAsync(newOrder);
+                if (createdOrder != null)
+                {
+                    Snackbar.Add("Order created successfully!", Severity.Success);
+                    await OnInitializedAsync();
+                    StateHasChanged();
+                }
+                else
+                {
+                    Snackbar.Add("Failed to create order.", Severity.Error);
+                }
+            }
+        }
+    }
+
+    private Color GetProgressColor(double progress)
+    {
+        if (progress >= 100) return Color.Success;
+        if (progress > 70) return Color.Info;
+        if (progress > 40) return Color.Warning;
+        return Color.Error;
+    }
+}

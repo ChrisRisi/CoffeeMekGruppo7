@@ -1,0 +1,93 @@
+@page "/lots/{LotId:int}"
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+@inject ILotService LotService
+@inject NavigationManager NavigationManager
+
+@if (_lot == null)
+{
+    <div class="d-flex justify-center align-center" style="height: 80vh;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </div>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudGrid Justify="Justify.SpaceBetween" AlignItems="Align.Center" Class="mb-4">
+            <MudItem>
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" />
+                <MudText Typo="Typo.h5" Component="span" Class="ml-2">Lot Detail: @_lot.Code</MudText>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.caption">Client</MudText>
+                    <MudText Typo="Typo.h6">@_lot.Order?.Client?.Name</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.caption">Machine Type</MudText>
+                    <MudText Typo="Typo.h6">CM-5000 Professional</MudText> 
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.caption">Facility</MudText>
+                    <MudText Typo="Typo.h6">@_lot.Site?.Name, @_lot.Site?.Country</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.caption">Quantity</MudText>
+                    <MudText Typo="Typo.h6">@_lot.Capacity units</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.caption">Start Date</MudText>
+                    <MudText Typo="Typo.h6">@_lot.StartTimeStamp?.ToString("MMM dd, yyyy, hh:mm tt UTC")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.caption">Est. Completion</MudText>
+                    <MudText Typo="Typo.h6">@_lot.PredictedEndTime?.ToString("MMM dd, yyyy, hh:mm tt UTC")</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudPaper Class="pa-4 mt-6" Elevation="2">
+            <MudText Typo="Typo.h6" GutterBottom="true">Production Progress</MudText>
+            <div class="d-flex align-center">
+                <MudText Class="mr-4">Overall Completion</MudText>
+                <MudProgressLinear Color="Color.Primary" Value="@_progressPercentage" Class="flex-grow-1" />
+                <MudText Class="ml-4 font-weight-bold">@_progressPercentage%</MudText>
+            </div>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter]
+    public int LotId { get; set; }
+
+    private Lot? _lot;
+    private double _progressPercentage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lot = await LotService.GetLotByIdAsync(LotId);
+        if (_lot != null && _lot.Capacity > 0)
+        {
+            _progressPercentage = Math.Round((double)_lot.CurrentQuantity / _lot.Capacity * 100, 1);
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+}

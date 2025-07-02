@@ -1,0 +1,228 @@
+@page "/machines"
+@implements IDisposable
+@using System.Timers
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+
+@inject ISiteService SiteService
+@inject IMachineService MachineService
+@inject IMillingMachineService MillingMachineService
+@inject ILatheService LatheService
+@inject IAssemblyLineService AssemblyLineService
+@inject ITestingLineService TestingLineService
+@inject NavigationManager NavigationManager
+
+<MudGrid Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudItem>
+        <MudText Typo="Typo.h3">Machines</MudText>
+    </MudItem>
+</MudGrid>
+
+<MudGrid Class="mb-4">
+    <MudItem xs="12" sm="6" md="4">
+        <MudSelect T="int?" Label="Filter by Site" ValueChanged="OnSiteSelected" Clearable="true">
+            @foreach (var site in _sites)
+            {
+                <MudSelectItem T="int?" Value="@site.Id">@site.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="4">
+        <MudSelect T="string" Label="Filter by Machine Type" ValueChanged="OnMachineTypeSelected" Clearable="true">
+            @foreach (var type in _machineTypes)
+            {
+                <MudSelectItem T="string" Value="@type">@type</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+</MudGrid>
+
+<MudGrid Spacing="3">
+    @if (_isLoading)
+    {
+        <MudItem xs="12">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </MudItem>
+    }
+    else if (FilteredMachines.Any())
+    {
+        foreach (var machine in FilteredMachines)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="2" @onclick="() => NavigateToMachineDetail(machine)" Style="cursor:pointer">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">@machine.Name</MudText>
+                            <MudText Typo="Typo.body2">Site: @machine.Site.Name</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.body2">Type: <MudChip T="string" Size="Size.Small" Color="Color.Secondary">@machine.MachineType</MudChip></MudText>
+                        <MudText Typo="Typo.body2">Status: 
+                            @if (machine.MachineState != null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="@GetStateColor(machine.MachineState.Id)">@machine.MachineState.Description</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default">Unknown</MudChip>
+                            }
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    }
+    else
+    {
+        <MudItem xs="12">
+            <MudText>No machines found matching the criteria.</MudText>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private bool _isLoading = true;
+    private List<Site> _sites = new();
+    private List<MachineViewModel> _allMachines = new();
+    private List<string> _machineTypes = new() { "Milling", "Lathe", "Assembly", "Testing" };
+    private Timer? _timer;
+
+    private int? _selectedSiteId;
+    private string? _selectedMachineType;
+
+    private List<MachineViewModel> FilteredMachines =>
+        _allMachines
+            .Where(m => !_selectedSiteId.HasValue || m.SiteId == _selectedSiteId.Value)
+            .Where(m => string.IsNullOrEmpty(_selectedMachineType) || m.MachineType.Equals(_selectedMachineType, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = (await SiteService.GetSitesAsync() ?? new List<Site>()).ToList();
+        await LoadMachineData();
+        _isLoading = false;
+
+        // Setup auto-refresh timer
+        _timer = new Timer(5000); // 5 seconds
+        _timer.Elapsed += async (sender, e) => await OnTimerElapsed();
+        _timer.AutoReset = true;
+        _timer.Start();
+    }
+
+    private async Task OnTimerElapsed()
+    {
+        await LoadMachineData();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadMachineData()
+    {
+        var machines = await MachineService.GetMachinesAsync() ?? Enumerable.Empty<Machine>();
+        var millingTelemetry = await MillingMachineService.GetMillingMachinesAsync() ?? Enumerable.Empty<MillingMachine>();
+        var latheTelemetry = await LatheService.GetLathesAsync() ?? Enumerable.Empty<Lathe>();
+        var assemblyTelemetry = await AssemblyLineService.GetAssemblyLinesAsync() ?? Enumerable.Empty<AssemblyLine>();
+        var testingTelemetry = await TestingLineService.GetTestingLinesAsync() ?? Enumerable.Empty<TestingLine>();
+
+        var millingLookup = millingTelemetry.ToLookup(t => t.MachineId);
+        var latheLookup = latheTelemetry.ToLookup(t => t.MachineId);
+        var assemblyLookup = assemblyTelemetry.ToLookup(t => t.MachineId);
+        var testingLookup = testingTelemetry.ToLookup(t => t.MachineId);
+
+        _allMachines = machines.Select(m => {
+            MachineTelemetry? latestTelemetry = null;
+            string machineType = "Unknown";
+
+            if (millingLookup.Contains(m.Id))
+            {
+                machineType = "Milling";
+                latestTelemetry = millingLookup[m.Id].OrderByDescending(t => t.LocalTimeStamp).FirstOrDefault();
+            }
+            else if (latheLookup.Contains(m.Id))
+            {
+                machineType = "Lathe";
+                latestTelemetry = latheLookup[m.Id].OrderByDescending(t => t.LocalTimeStamp).FirstOrDefault();
+            }
+            else if (assemblyLookup.Contains(m.Id))
+            {
+                machineType = "Assembly";
+                latestTelemetry = assemblyLookup[m.Id].OrderByDescending(t => t.LocalTimeStamp).FirstOrDefault();
+            }
+            else if (testingLookup.Contains(m.Id))
+            {
+                machineType = "Testing";
+                latestTelemetry = testingLookup[m.Id].OrderByDescending(t => t.LocalTimeStamp).FirstOrDefault();
+            }
+
+            return new MachineViewModel
+            {
+                Id = m.Id,
+                Name = m.Name,
+                SiteId = m.SiteId,
+                Site = m.Site,
+                MachineType = machineType,
+                MachineState = latestTelemetry?.MachineState
+            };
+        }).ToList();
+    }
+
+    private async Task OnSiteSelected(int? siteId)
+    {
+        _selectedSiteId = siteId;
+        StateHasChanged();
+    }
+
+    private async Task OnMachineTypeSelected(string machineType)
+    {
+        _selectedMachineType = machineType;
+        StateHasChanged();
+    }
+
+    private void NavigateToMachineDetail(MachineViewModel machine)
+    {
+        string? url = machine.MachineType switch
+        {
+            "Milling" => $"/millingmachine/{machine.Id}",
+            "Lathe" => $"/lathes/{machine.Id}",
+            "Testing" => $"/testingline/{machine.Id}",
+            "Assembly" => $"/assemblyline/{machine.Id}",
+            _ => null
+        };
+
+        if (!string.IsNullOrEmpty(url))
+        {
+            NavigationManager.NavigateTo(url);
+        }
+    }
+
+    private Color GetStateColor(int stateId)
+    {
+        return stateId switch
+        {
+            1 => Color.Success, // Operativa
+            2 => Color.Warning, // In manutenzione
+            3 => Color.Info,    // Ferma
+            4 => Color.Error,   // Errore
+            5 => Color.Default, // Standby
+            6 => Color.Success, // Test Superato
+            7 => Color.Error,   // Test Fallito
+            _ => Color.Default
+        };
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+
+    // Private view model to hold combined data
+    private class MachineViewModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = null!;
+        public int SiteId { get; set; }
+        public Site Site { get; set; } = null!;
+        public string MachineType { get; set; } = null!;
+        public MachineState? MachineState { get; set; }
+    }
+}

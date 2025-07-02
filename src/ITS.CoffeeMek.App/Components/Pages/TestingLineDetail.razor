@@ -1,0 +1,376 @@
+@page "/testingline/{MachineId:int}"
+@implements IDisposable
+@using System.Timers
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+@using ApexCharts
+@using MudBlazor
+
+@inject ITestingLineService TestingLineService
+@inject IMachineService MachineService
+@inject NavigationManager NavigationManager
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="@MudBlazor.Color.Primary" Indeterminate="true" />
+    }
+    else if (_machine != null)
+    {
+        <!-- Header Section -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="12">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudGrid AlignItems="Center.Center">
+                        <MudItem xs="12" md="8">
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBackToMachines" />
+                            <MudText Typo="Typo.h4" Component="span" Class="ml-2 mb-2">@_machine.Name</MudText>
+                            <br />
+                            <MudText Typo="Typo.h6" Class="mb-1 ml-12">Site: @_machine.Site?.Name</MudText>
+                            <MudText Typo="Typo.body1" Class="ml-12">Country: @_machine.Site?.Country</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Current Status Section -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="12">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h5" Class="mb-3">Current Status</MudText>
+                    <MudGrid>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Machine State:</MudText>
+                            <MudChip T="string" Color="@GetStateColor()" Size="@MudBlazor.Size.Medium" Class="mt-1">
+                                @(_latestTelemetry?.MachineState?.Description ?? "Unknown")
+                            </MudChip>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Boiler Pressure:</MudText>
+                            <MudText Typo="Typo.h6">@(_latestTelemetry?.BoilerPressure?.ToString("F2") ?? "N/A") bar</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Boiler Temperature:</MudText>
+                            <MudText Typo="Typo.h6">@(_latestTelemetry?.BoilerTemperature?.ToString("F1") ?? "N/A") °C</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Energy Consumption:</MudText>
+                            <MudText Typo="Typo.h6">@(_latestTelemetry?.EnergyConsumption?.ToString("F2") ?? "N/A") kWh</MudText>
+                        </MudItem>
+                    </MudGrid>
+                    <MudDivider Class="my-3" />
+                    <MudGrid>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Last Update:</MudText>
+                            <MudText Typo="Typo.body1">@(_latestTelemetry?.LocalTimeStamp?.ToString("MMM dd, HH:mm") ?? "N/A")</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudText Typo="Typo.body2">Test Pass Rate:</MudText>
+                            <MudText Typo="Typo.h6" Style="@GetPassRateColor()">@_testPassRate.ToString("F1")%</MudText>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Testing Line Specific Charts -->
+        <MudGrid Class="mb-6">
+            <!-- Boiler Pressure Chart -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Boiler Pressure Over Time</MudText>
+                    <ApexChart TItem="TestingLine" Title="Pressure (bar)" Height="300" Options="GetChartOptions()">
+                        <ApexPointSeries TItem="TestingLine"
+                                         Items="_machineHistory"
+                                         Name="This Machine"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.BoilerPressure.HasValue ? Math.Round(e.BoilerPressure.Value, 2) : (decimal?)null)" />
+                        <ApexPointSeries TItem="TestingLine"
+                                         Items="_averageHistory"
+                                         Name="Average All Machines"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.BoilerPressure.HasValue ? Math.Round(e.BoilerPressure.Value, 2) : (decimal?)null)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Boiler Temperature Chart -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Boiler Temperature Over Time</MudText>
+                    <ApexChart TItem="TestingLine" Title="Temperature (°C)" Height="300" Options="GetChartOptions()">
+                        <ApexPointSeries TItem="TestingLine"
+                                         Items="_machineHistory"
+                                         Name="This Machine"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.BoilerTemperature.HasValue ? Math.Round(e.BoilerTemperature.Value, 2) : (decimal?)null)" />
+                        <ApexPointSeries TItem="TestingLine"
+                                         Items="_averageHistory"
+                                         Name="Average All Machines"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.BoilerTemperature.HasValue ? Math.Round(e.BoilerTemperature.Value, 2) : (decimal?)null)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Energy Consumption Chart -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Energy Consumption Over Time</MudText>
+                    <ApexChart TItem="TestingLine" Title="Energy (kWh)" Height="300" Options="GetChartOptions()">
+                        <ApexPointSeries TItem="TestingLine"
+                                         Items="_machineHistory"
+                                         Name="This Machine"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.EnergyConsumption.HasValue ? Math.Round(e.EnergyConsumption.Value, 2) : (decimal?)null)" />
+                        <ApexPointSeries TItem="TestingLine"
+                                         Items="_averageHistory"
+                                         Name="Average All Machines"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.LocalTimeStamp)"
+                                         YValue="@(e => e.EnergyConsumption.HasValue ? Math.Round(e.EnergyConsumption.Value, 2) : (decimal?)null)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Test Results Chart -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Test Results Over Time</MudText>
+                    <ApexChart TItem="TestResult" Title="Test Results" Height="300">
+                        <ApexPointSeries TItem="TestResult"
+                                         Items="_testResults"
+                                         Name="Passed Tests"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.TimeSlot)"
+                                         YValue="@(e => (decimal)e.PassedCount)" />
+                        <ApexPointSeries TItem="TestResult"
+                                         Items="_testResults"
+                                         Name="Failed Tests"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.TimeSlot)"
+                                         YValue="@(e => (decimal)e.FailedCount)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <!-- State Distribution Chart with Test Results -->
+            <MudItem xs="12">
+                <MudPaper Elevation="2" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Machine State Distribution (Including Test Results)</MudText>
+                    <div style="height: 400px;">
+                        <ApexChart TItem="StateDistribution" Title="Time Spent in Each State" Height="350">
+                            <ApexPointSeries TItem="StateDistribution"
+                                             Items="_stateDistribution"
+                                             Name="Hours"
+                                             SeriesType="SeriesType.Donut"
+                                             XValue="@(e => e.StateName)"
+                                             YValue="@(e => e.Count)" />
+                        </ApexChart>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning">Machine not found or no data available.</MudAlert>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public int MachineId { get; set; }
+
+    private bool _isLoading = true;
+    private Machine? _machine;
+    private TestingLine? _latestTelemetry;
+    private List<TestingLine> _machineHistory = new();
+    private List<TestingLine> _averageHistory = new();
+    private List<StateDistribution> _stateDistribution = new();
+    private List<TestResult> _testResults = new();
+    private double _testPassRate;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMachineData();
+        _isLoading = false;
+
+        // Setup auto-refresh timer
+        _timer = new Timer(3000); // 3 seconds
+        _timer.Elapsed += async (sender, e) => await OnTimerElapsed();
+        _timer.AutoReset = true;
+        _timer.Start();
+    }
+
+    private async Task OnTimerElapsed()
+    {
+        await LoadMachineData();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadMachineData()
+    {
+        try
+        {
+            // Load machine basic info
+            var machines = await MachineService.GetMachinesAsync();
+            _machine = machines?.FirstOrDefault(m => m.Id == MachineId);
+
+            if (_machine == null) return;
+
+            // Load machine history
+            _machineHistory = (await TestingLineService.GetTestingLineHistoryAsync(MachineId))?.ToList() ?? new();
+            _latestTelemetry = _machineHistory.OrderByDescending(h => h.LocalTimeStamp).FirstOrDefault();
+
+            // Load all testing lines for average calculation
+            var allMachines = (await TestingLineService.GetTestingLinesAsync())?.ToList() ?? new();
+
+            // Calculate averages grouped by time periods
+            _averageHistory = CalculateAverageHistory(allMachines);
+
+            // Calculate state distribution (including test results)
+            _stateDistribution = CalculateStateDistribution(_machineHistory);
+
+            // Calculate test results
+            _testResults = CalculateTestResults(_machineHistory);
+
+            // Calculate test pass rate
+            _testPassRate = CalculateTestPassRate(_machineHistory);
+        }
+        catch (Exception ex)
+        {
+            // Handle error - could show in UI
+            Console.WriteLine($"Error loading machine data: {ex.Message}");
+        }
+    }
+
+    private List<TestingLine> CalculateAverageHistory(List<TestingLine> allMachines)
+    {
+        return allMachines
+            .Where(m => m.LocalTimeStamp.HasValue)
+            .GroupBy(m => new { 
+                Hour = m.LocalTimeStamp.Value.Hour,
+                Minute = m.LocalTimeStamp.Value.Minute / 10 * 10 // Group by 10-minute intervals
+            })
+            .Select(g => new TestingLine
+            {
+                LocalTimeStamp = g.First().LocalTimeStamp,
+                BoilerPressure = g.Where(x => x.BoilerPressure.HasValue).Average(x => x.BoilerPressure),
+                BoilerTemperature = g.Where(x => x.BoilerTemperature.HasValue).Average(x => x.BoilerTemperature),
+                EnergyConsumption = g.Where(x => x.EnergyConsumption.HasValue).Average(x => x.EnergyConsumption)
+            })
+            .OrderBy(x => x.LocalTimeStamp)
+            .ToList();
+    }
+
+    private List<StateDistribution> CalculateStateDistribution(List<TestingLine> history)
+    {
+        var stateGroups = history
+            .Where(h => h.MachineState != null)
+            .GroupBy(h => h.MachineState!.Description ?? "Unknown")
+            .Select(g => new StateDistribution
+            {
+                StateName = g.Key,
+                Count = g.Count()
+            })
+            .ToList();
+
+        return stateGroups;
+    }
+
+    private List<TestResult> CalculateTestResults(List<TestingLine> history)
+    {
+        return history
+            .Where(h => h.LocalTimeStamp.HasValue && h.MachineState != null)
+            .GroupBy(h => new { 
+                Hour = h.LocalTimeStamp.Value.Hour,
+                Minute = h.LocalTimeStamp.Value.Minute / 30 * 30 // Group by 30-minute intervals
+            })
+            .Select(g => new TestResult
+            {
+                TimeSlot = $"{g.Key.Hour:D2}:{g.Key.Minute:D2}",
+                PassedCount = g.Count(x => x.MachineState.Id == 6), // Test Superato
+                FailedCount = g.Count(x => x.MachineState.Id == 7)  // Test Fallito
+            })
+            .OrderBy(x => x.TimeSlot)
+            .ToList();
+    }
+
+    private double CalculateTestPassRate(List<TestingLine> history)
+    {
+        var testStates = history.Where(h => h.MachineState != null && 
+                                          (h.MachineState.Id == 6 || h.MachineState.Id == 7)).ToList();
+
+        if (!testStates.Any()) return 0;
+
+        var passedTests = testStates.Count(h => h.MachineState.Id == 6);
+        return (double)passedTests / testStates.Count * 100;
+    }
+
+    private MudBlazor.Color GetStateColor()
+    {
+        return _latestTelemetry?.MachineState?.Id switch
+        {
+            1 => MudBlazor.Color.Success, // Operativa
+            2 => MudBlazor.Color.Warning, // In manutenzione
+            3 => MudBlazor.Color.Info,    // Ferma
+            4 => MudBlazor.Color.Error,   // Errore
+            5 => MudBlazor.Color.Default, // Standby
+            6 => MudBlazor.Color.Success, // Test Superato
+            7 => MudBlazor.Color.Error,   // Test Fallito
+            _ => MudBlazor.Color.Default
+        };
+    }
+
+    private string GetPassRateColor()
+    {
+        return _testPassRate >= 90 ? "color: green;" :
+               _testPassRate >= 70 ? "color: orange;" : "color: red;";
+    }
+
+    private void GoBackToMachines()
+    {
+        NavigationManager.NavigateTo("/machines");
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+
+    private ApexChartOptions<TestingLine> GetChartOptions()
+    {
+        return new ApexChartOptions<TestingLine>()
+        {
+            
+            Xaxis = new()
+            {
+                Type = XAxisType.Datetime,
+                Labels = new XAxisLabels()
+                {
+                    Format = "HH:mm"
+                }
+            }
+        };
+    }
+
+    private class StateDistribution
+    {
+        public string StateName { get; set; } = "";
+        public int Count { get; set; }
+    }
+
+    private class TestResult
+    {
+        public string TimeSlot { get; set; } = "";
+        public int PassedCount { get; set; }
+        public int FailedCount { get; set; }
+    }
+}

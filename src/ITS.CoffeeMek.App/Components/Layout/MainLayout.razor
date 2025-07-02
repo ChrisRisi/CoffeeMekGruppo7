@@ -1,0 +1,70 @@
+@inherits LayoutComponentBase
+@using MudBlazor
+@inject NavigationManager NavigationManager
+
+<MudThemeProvider Theme="_theme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout Class="d-flex flex-column" Style="min-height: 100vh;">
+    <MudAppBar Elevation="1" Color="Color.Default">
+        <MudToolBar>
+            <MudText Typo="Typo.h5" Class="ml-2">CoffeeMek Manufacturing</MudText>
+            <MudButton Href="/" Variant="Variant.Text" Color="Color.Inherit" Class="ml-4">Dashboard</MudButton>
+            <MudButton Href="/orders" Variant="Variant.Text" Color="Color.Inherit">Orders</MudButton>
+            <MudButton Href="/machines" Variant="Variant.Text" Color="Color.Inherit">Machines</MudButton>
+            <MudButton Href="/clients" Variant="Variant.Text" Color="Color.Inherit">Clients</MudButton>
+            @* <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" />
+            <MudIconButton Icon="@Icons.Material.Filled.Person" Color="Color.Inherit" /> *@
+        </MudToolBar>
+    </MudAppBar>
+
+    <MudMainContent Class="flex-grow-1">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+
+    <MudAppBar Bottom="true" Fixed="false" Elevation="1" Color="Color.Default">
+        <MudToolBar>
+            <MudText Typo="Typo.caption">&copy; @DateTime.Now.Year CoffeeMek. Manufacturing. All rights reserved.</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.caption">Production Monitoring Platform v1.0</MudText>
+        </MudToolBar>
+    </MudAppBar>
+</MudLayout>
+
+@code {
+    private MudTheme _theme = new MudTheme()
+    {
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#00A8E8",
+            Secondary = "#007EA7",
+            Background = "#303030",
+            AppbarBackground = "#212121",
+            Surface = "#424242",
+            DrawerBackground = "#212121",
+            TextPrimary = "#FFFFFF",
+            TextSecondary = "rgba(255,255,255, 0.7)",
+            ActionDefault = "#00A8E8",
+            ActionDisabled = "rgba(255,255,255, 0.26)",
+            LinesDefault = "rgba(255,255,255, 0.12)"
+        },
+        LayoutProperties = new LayoutProperties()
+        {
+            DefaultBorderRadius = "16px"
+        },
+        Typography = new Typography()
+        {
+            Default = new DefaultTypography()
+            {
+                FontFamily = new[] { "Roboto", "Helvetica", "Arial", "sans-serif" }
+            }
+        }
+    };
+
+
+}

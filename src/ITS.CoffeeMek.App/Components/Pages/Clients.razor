@@ -1,0 +1,146 @@
+@page "/clients"
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+@inject IClientService ClientService
+@inject IOrderService OrderService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudGrid Justify="Justify.SpaceBetween" AlignItems="Align.Center" Class="mb-4">
+    <MudItem>
+        <MudText Typo="Typo.h3" GutterBottom="true">Clients and Orders</MudText>
+    </MudItem>
+    <MudItem>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreateClientDialog">Create Client</MudButton>
+    </MudItem>
+</MudGrid>
+
+@if (_clients == null || _ordersByClientId == null)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudExpansionPanels>
+        @foreach (var client in _clients)
+        {
+            <MudExpansionPanel Text="@client.Name">
+                <div class="d-flex justify-end pa-2 border-bottom">
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => OpenCreateOrderDialog(client))">Create Order</MudButton>
+                </div>
+                @if (_ordersByClientId.TryGetValue(client.Id, out var orders) && orders.Any())
+                {
+                    <MudTable Items="orders" Hover="true" Dense="true" Class="mt-2">
+                        <HeaderContent>
+                            <MudTh>Order ID</MudTh>
+                            <MudTh>Quantity</MudTh>
+                            <MudTh>Creation Date</MudTh>
+                            <MudTh>Status</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Order ID">@context.Id</MudTd>
+                            <MudTd DataLabel="Quantity">@context.Quantity</MudTd>
+                            <MudTd DataLabel="Creation Date">@context.CreationTime.ToShortDateString()</MudTd>
+                            <MudTd DataLabel="Status">
+                                @if (context.FulfillmentTime.HasValue)
+                                {
+                                    <MudChip T="object" Color="Color.Success" Size="Size.Small">Closed</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="object" Color="Color.Warning" Size="Size.Small">Open</MudChip>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <MudText Class="pa-4">No orders found for this client.</MudText>
+                }
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    private IEnumerable<Client>? _clients;
+    private IReadOnlyDictionary<int, List<Order>>? _ordersByClientId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var clientsTask = ClientService.GetClientsAsync();
+        var ordersTask = OrderService.GetOrdersAsync();
+
+        await Task.WhenAll(clientsTask, ordersTask);
+
+        _clients = (clientsTask.Result ?? new List<Client>()).OrderBy(c => c.Name).ToList();
+        var orders = ordersTask.Result ?? new List<Order>();
+
+        _ordersByClientId = orders.GroupBy(o => o.ClientId).ToDictionary(g => g.Key, g => g.ToList());
+    }
+
+    private async Task OpenCreateClientDialog()
+    {
+        var dialog = await DialogService.ShowAsync<CreateClientDialog>("Create New Client");
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is CreateClientDialog.ClientModel newClientModel)
+        {
+            var newClient = new Client
+            {
+                Name = newClientModel.Name,
+                Address = newClientModel.Address
+            };
+
+            var createdClient = await ClientService.AddClientAsync(newClient);
+            if (createdClient != null)
+            {
+                Snackbar.Add("Client created successfully!", Severity.Success);
+                await OnInitializedAsync();
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Failed to create client.", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenCreateOrderDialog(Client client)
+    {
+        var parameters = new DialogParameters
+        {
+            ["ClientId"] = client.Id
+        };
+        var dialog = await DialogService.ShowAsync<CreateOrderDialog>("Create New Order", parameters);
+        var result = await dialog.Result;
+
+        if (result != null)
+        {
+            Snackbar.Add($"Dialog result: Canceled={result.Canceled}, Data is null={result.Data == null}", Severity.Info);
+        }
+
+        if (result != null && !result.Canceled && result.Data is CreateOrderDialog.CreateOrderModel newOrderModel)
+        {
+            var newOrder = new Order
+            {
+                ClientId = client.Id,
+                Quantity = newOrderModel.Quantity ?? 0,
+                CreationTime = DateTime.UtcNow
+            };
+
+            var createdOrder = await OrderService.AddOrderAsync(newOrder);
+            if (createdOrder != null)
+            {
+                Snackbar.Add("Order created successfully!", Severity.Success);
+                await OnInitializedAsync();
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Failed to create order.", Severity.Error);
+            }
+        }
+    }
+}

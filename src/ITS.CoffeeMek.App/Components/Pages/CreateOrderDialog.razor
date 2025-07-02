@@ -1,0 +1,88 @@
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+@using System.ComponentModel.DataAnnotations
+@inject IClientService ClientService
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.AddShoppingCart" Class="mr-2" /> Create New Order
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_success" Class="mt-4">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudSelect T="int?" Label="Client" @bind-Value="_orderModel.ClientId" For="() => _orderModel.ClientId" Required="true" RequiredError="Please select a client." Disabled="@ClientId.HasValue">
+                        @foreach (var client in _clients)
+                        {
+                            <MudSelectItem T="int?" Value="@client.Id">@client.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudNumericField T="int?" Label="Quantity" @bind-Value="_orderModel.Quantity" For="() => _orderModel.Quantity" Required="true" RequiredError="Quantity is required." Min="50" Step="50" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="!_success" Variant="Variant.Filled">Create Order</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public int? ClientId { get; set; }
+
+    private MudForm _form = default!;
+    private bool _success;
+    private CreateOrderModel _orderModel = new();
+    private IEnumerable<Client> _clients = new List<Client>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _clients = await ClientService.GetClientsAsync() ?? new List<Client>();
+        if (ClientId.HasValue)
+        {
+            _orderModel.ClientId = ClientId.Value;
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (_success)
+        {
+            MudDialog.Close(DialogResult.Ok(_orderModel));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+        public class CreateOrderModel
+    {
+        [Required(ErrorMessage = "Please select a client.")]
+        public int? ClientId { get; set; }
+
+        [Required(ErrorMessage = "Quantity is required.")]
+        [Range(50, int.MaxValue, ErrorMessage = "Quantity must be at least 50.")]
+        [MustBeMultipleOf50(ErrorMessage = "Quantity must be a multiple of 50.")]
+        public int? Quantity { get; set; }
+    }
+
+    public class MustBeMultipleOf50Attribute : ValidationAttribute
+    {
+        protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+        {
+            if (value == null) return ValidationResult.Success; // Let Required attribute handle nulls.
+
+            if (value is int quantity && quantity % 50 == 0)
+            {
+                return ValidationResult.Success;
+            }
+            return new ValidationResult(ErrorMessage ?? "The value must be a multiple of 50.");
+        }
+    }
+}

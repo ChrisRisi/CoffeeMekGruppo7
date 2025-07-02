@@ -1,0 +1,49 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36202.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ITS.CoffeeMek.Api", "src\ITS.CoffeeMek.Api\ITS.CoffeeMek.Api.csproj", "{017EF411-F63C-4A7D-B457-A26BFE5A4CB4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ITS.CoffeeMek.App", "src\ITS.CoffeeMek.App\ITS.CoffeeMek.App.csproj", "{5A8228DA-1B0E-493D-A8AF-4C6BF6555DAA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ITS.CoffeeMek.Models", "src\ITS.CoffeeMek.Models\ITS.CoffeeMek.Models.csproj", "{1DC557D4-5A46-40BF-B230-1346B6FD1158}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ITS.CoffeeMek.Simulator", "src\ITS.CoffeeMek.Simulator\ITS.CoffeeMek.Simulator.csproj", "{DB5C685E-C606-4D2F-A274-C2B7F952A381}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ITS.CoffeeMek.DataProcessor", "src\ITS.CoffeeMek.DataProcessor\ITS.CoffeeMek.DataProcessor.csproj", "{68EC3B82-5BDD-B036-6B8B-48BC29A3CBDD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{017EF411-F63C-4A7D-B457-A26BFE5A4CB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{017EF411-F63C-4A7D-B457-A26BFE5A4CB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{017EF411-F63C-4A7D-B457-A26BFE5A4CB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{017EF411-F63C-4A7D-B457-A26BFE5A4CB4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5A8228DA-1B0E-493D-A8AF-4C6BF6555DAA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5A8228DA-1B0E-493D-A8AF-4C6BF6555DAA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5A8228DA-1B0E-493D-A8AF-4C6BF6555DAA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5A8228DA-1B0E-493D-A8AF-4C6BF6555DAA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1DC557D4-5A46-40BF-B230-1346B6FD1158}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1DC557D4-5A46-40BF-B230-1346B6FD1158}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1DC557D4-5A46-40BF-B230-1346B6FD1158}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1DC557D4-5A46-40BF-B230-1346B6FD1158}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB5C685E-C606-4D2F-A274-C2B7F952A381}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB5C685E-C606-4D2F-A274-C2B7F952A381}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB5C685E-C606-4D2F-A274-C2B7F952A381}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB5C685E-C606-4D2F-A274-C2B7F952A381}.Release|Any CPU.Build.0 = Release|Any CPU
+		{68EC3B82-5BDD-B036-6B8B-48BC29A3CBDD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{68EC3B82-5BDD-B036-6B8B-48BC29A3CBDD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{68EC3B82-5BDD-B036-6B8B-48BC29A3CBDD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{68EC3B82-5BDD-B036-6B8B-48BC29A3CBDD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {21C149DD-0D4E-4BB1-B8BD-564730FA8580}
+	EndGlobalSection
+EndGlobal

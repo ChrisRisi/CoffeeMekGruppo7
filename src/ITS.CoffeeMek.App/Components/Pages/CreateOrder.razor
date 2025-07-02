@@ -1,0 +1,103 @@
+@page "/orders/create"
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+@using System.ComponentModel.DataAnnotations
+@inject IOrderService OrderService
+@inject IClientService ClientService
+@inject ISiteService SiteService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h3" GutterBottom="true">Create New Order</MudText>
+
+<MudForm @ref="_form" @bind-IsValid="_success">
+    <MudGrid>
+        <MudItem xs="12" sm="4">
+            <MudSelect T="int" Label="Client" @bind-Value="_orderModel.ClientId" For="() => _orderModel.ClientId" Required="true">
+                @foreach (var client in _clients)
+                {
+                    <MudSelectItem T="int" Value="@client.Id">@client.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudSelect T="int" Label="Site" @bind-Value="_orderModel.SiteId" For="() => _orderModel.SiteId" Required="true">
+                @foreach (var site in _sites)
+                {
+                    <MudSelectItem T="int" Value="@site.Id">@site.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudNumericField T="int" Label="Quantity" @bind-Value="_orderModel.Quantity" For="() => _orderModel.Quantity" Required="true" Min="50" Step="50" />
+        </MudItem>
+    </MudGrid>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Class="mt-4">Create Order</MudButton>
+</MudForm>
+
+@code {
+    private MudForm? _form;
+    private bool _success;
+    private CreateOrderModel _orderModel = new();
+    private IEnumerable<Client> _clients = new List<Client>();
+    private IEnumerable<Site> _sites = new List<Site>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var clientsTask = ClientService.GetClientsAsync();
+        var sitesTask = SiteService.GetSitesAsync();
+        await Task.WhenAll(clientsTask, sitesTask);
+        _clients = clientsTask.Result ?? new List<Client>();
+        _sites = sitesTask.Result ?? new List<Site>();
+    }
+
+    private async Task Submit()
+    {
+        await _form!.Validate();
+        if (_success)
+        {
+            var newOrder = new Order
+            {
+                ClientId = _orderModel.ClientId,
+                
+                Quantity = _orderModel.Quantity
+            };
+
+            var result = await OrderService.AddOrderAsync(newOrder);
+            if (result != null)
+            {
+                Snackbar.Add("Order created successfully!", Severity.Success);
+                NavigationManager.NavigateTo("/orders");
+            }
+            else
+            {
+                Snackbar.Add("Failed to create order.", Severity.Error);
+            }
+        }
+    }
+
+    public class CreateOrderModel
+    {
+        [Range(1, int.MaxValue, ErrorMessage = "Please select a client.")]
+        public int ClientId { get; set; }
+
+        [Range(1, int.MaxValue, ErrorMessage = "Please select a site.")]
+        public int SiteId { get; set; }
+
+        [Range(50, int.MaxValue, ErrorMessage = "Quantity must be at least 50.")]
+        [MustBeMultipleOf50(ErrorMessage = "Quantity must be a multiple of 50.")]
+        public int Quantity { get; set; }
+    }
+
+    public class MustBeMultipleOf50Attribute : ValidationAttribute
+    {
+        protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+        {
+            if (value is int quantity && quantity % 50 == 0)
+            {
+                return ValidationResult.Success;
+            }
+            return new ValidationResult(ErrorMessage ?? "The value must be a multiple of 50.");
+        }
+    }
+}

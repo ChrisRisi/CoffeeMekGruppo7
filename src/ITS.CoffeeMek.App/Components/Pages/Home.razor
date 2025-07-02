@@ -1,0 +1,157 @@
+@page "/"
+@implements IDisposable
+@using System.Timers
+@using ITS.CoffeeMek.Models
+@inject ITS.CoffeeMek.App.Services.Interfaces.ILotService LotService
+@inject ITS.CoffeeMek.App.Services.Interfaces.ISiteService SiteService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<MudGrid Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudItem>
+        <MudText Typo="Typo.h3">Lots</MudText>
+    </MudItem>
+    <MudItem>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreateLotDialog">Create New Lot</MudButton>
+    </MudItem>
+</MudGrid>
+
+<MudGrid Class="mb-4">
+    <MudItem xs="12" sm="6" md="4">
+        <MudSelect T="int?" Label="Filter by Site" ValueChanged="OnSiteSelected" Clearable="true">
+            @foreach (var site in _sites)
+            {
+                <MudSelectItem T="int?" Value="@site.Id">@site.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+</MudGrid>
+
+<MudGrid Spacing="3">
+    @if (_isLoading)
+    {
+        <MudItem xs="12">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </MudItem>
+    }
+    else if (_lots.Any())
+    {
+        foreach (var lot in _lots)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="2" @onclick="() => NavigateToLot(lot.Id)" Style="cursor:pointer">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Lot: @lot.Code</MudText>
+                            <MudText Typo="Typo.body2">Client: @(lot.Order?.Client?.Name ?? "N/A")</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.body2">Site: <MudChip T="string" Size="Size.Small" Color="Color.Info">@lot.Site.Name</MudChip> <MudChip T="string" Size="Size.Small" Color="Color.Default">@lot.Site.Country</MudChip></MudText>
+                        <MudText Typo="Typo.body2" Class="mt-2">Production Progress:</MudText>
+                        <MudProgressLinear Color="@GetProgressColor(lot)" Value="@GetProgress(lot)" Class="my-1" />
+                        <MudText Typo="Typo.caption">@lot.CurrentQuantity / @lot.Capacity Units</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    }
+    else
+    {
+        <MudItem xs="12">
+            <MudText>No lots found.</MudText>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private IEnumerable<Lot> _lots = new List<Lot>();
+    private IEnumerable<Site> _sites = new List<Site>();
+    private int? _selectedSiteId;
+    private bool _isLoading = true;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetSitesAsync() ?? new List<Site>();
+        await LoadLotsAsync();
+
+        _timer = new Timer(3000);
+        _timer.Elapsed += async (sender, e) => await OnTimerElapsed();
+        _timer.AutoReset = true;
+        _timer.Start();
+    }
+
+    private async Task OnTimerElapsed()
+    {
+        await LoadLotsAsync();
+    }
+
+    private async Task OnSiteSelected(int? siteId)
+    {
+        _selectedSiteId = siteId;
+        await LoadLotsAsync();
+    }
+
+    private async Task LoadLotsAsync()
+    {
+        _isLoading = true;
+
+        if (_selectedSiteId.HasValue && _selectedSiteId.Value > 0)
+        {
+            _lots = await LotService.GetLotsBySiteIdAsync(_selectedSiteId.Value) ?? new List<Lot>();
+        }
+        else
+        {
+            _lots = await LotService.GetLotsAsync() ?? new List<Lot>();
+        }
+
+        _isLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private double GetProgress(Lot lot)
+    {
+        if (lot.Capacity == 0) return 0;
+        return (double)lot.CurrentQuantity / lot.Capacity * 100;
+    }
+
+    private Color GetProgressColor(Lot lot)
+    {
+        var progress = GetProgress(lot);
+        if (progress < 33) return Color.Error;
+        if (progress < 66) return Color.Warning;
+        return Color.Success;
+    }
+
+        private void NavigateToLot(int lotId)
+    {
+        NavigationManager.NavigateTo($"/lots/{lotId}");
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+
+        private async Task OpenCreateLotDialog()
+    {
+        var dialog = await DialogService.ShowAsync<CreateLotDialog>("Create New Lot");
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is Lot newLot)
+        {
+            var createdLot = await LotService.AddLotAsync(newLot);
+            if (createdLot != null)
+            {
+                Snackbar.Add("Lot created successfully!", Severity.Success);
+                await LoadLotsAsync();
+            }
+            else
+            {
+                Snackbar.Add("Failed to create lot.", Severity.Error);
+            }
+        }
+    }
+}

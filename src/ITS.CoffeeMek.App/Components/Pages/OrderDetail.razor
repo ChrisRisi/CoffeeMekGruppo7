@@ -1,0 +1,125 @@
+@page "/orders/{OrderId:int}"
+@implements IDisposable
+@using System.Timers
+@using ITS.CoffeeMek.Models
+@using ITS.CoffeeMek.App.Services.Interfaces
+@inject IOrderService OrderService
+@inject ILotService LotService
+@inject NavigationManager NavigationManager
+
+<MudText Typo="Typo.h3" GutterBottom="true">Order Details</MudText>
+
+@if (_order == null)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" />
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h5">Order #@_order.Id</MudText>
+                        <MudText Typo="Typo.subtitle1">Client: @_order.Client?.Name</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText><b>Quantity:</b> @_order.Quantity</MudText>
+                    <MudText><b>Created:</b> @_order.CreationTime.ToShortDateString()</MudText>
+                    <MudText><b>Fulfilled:</b> @_totalCurrentQuantity / @_order.Quantity</MudText>
+                    <MudProgressLinear Color="Color.Primary" Value="@(_order.Quantity > 0 ? (double)_totalCurrentQuantity / _order.Quantity * 100 : 0)" Class="my-2" />
+                    <MudText><b>Status:</b> 
+                        @if (_order.FulfillmentTime.HasValue)
+                        {
+                            <MudChip T="object" Color="Color.Success" Size="Size.Small">Closed</MudChip>
+                        }
+                        else if (_totalCurrentQuantity >= _order.Quantity)
+                        {
+                            <MudChip T="object" Color="Color.Info" Size="Size.Small">In Progress</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="object" Color="Color.Warning" Size="Size.Small">Open</MudChip>
+                        }
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.h4" Class="mt-6 mb-4">Attached Lots</MudText>
+
+    @if (_lots == null || !_lots.Any())
+    {
+        <MudText>No lots have been attached to this order yet.</MudText>
+    }
+    else
+    {
+        <MudTable Items="@_lots" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                <MudTh>Lot Code</MudTh>
+                <MudTh>Capacity</MudTh>
+                <MudTh>Current Quantity</MudTh>
+                <MudTh>Progress</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Lot Code">@context.Code</MudTd>
+                <MudTd DataLabel="Capacity">@context.Capacity</MudTd>
+                <MudTd DataLabel="Current Quantity">@context.CurrentQuantity</MudTd>
+                <MudTd DataLabel="Progress">
+                    <MudProgressCircular Color="Color.Primary" Value="@(context.Capacity > 0 ? (double)context.CurrentQuantity / context.Capacity * 100 : 0)" Size="Size.Medium">
+                        <MudText Style="font-size: 0.8rem;">@($"{(context.Capacity > 0 ? (double)context.CurrentQuantity / context.Capacity * 100 : 0):F0}%")</MudText>
+                    </MudProgressCircular>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    [Parameter]
+    public int OrderId { get; set; }
+
+    private Order? _order;
+    private IEnumerable<Lot>? _lots;
+    private int _totalCurrentQuantity;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrderData();
+
+        _timer = new Timer(3000); // 3 seconds
+        _timer.Elapsed += async (sender, e) => await OnTimerElapsed();
+        _timer.AutoReset = true;
+        _timer.Start();
+    }
+
+    private async Task OnTimerElapsed()
+    {
+        await LoadOrderData();
+    }
+
+    private async Task LoadOrderData()
+    {
+        _order = await OrderService.GetOrderByIdAsync(OrderId);
+        if (_order != null)
+        {
+            _lots = await LotService.GetLotsByOrderIdAsync(OrderId);
+            _totalCurrentQuantity = _lots?.Sum(l => l.CurrentQuantity) ?? 0;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/orders");
+    }
+}

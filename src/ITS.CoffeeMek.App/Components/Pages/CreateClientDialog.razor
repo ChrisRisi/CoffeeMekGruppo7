@@ -1,0 +1,41 @@
+@using ITS.CoffeeMek.Models
+@using System.ComponentModel.DataAnnotations
+
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Class="mr-2" /> Create New Client
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_success" Class="mt-4">
+            <MudTextField @bind-Value="_clientModel.Name" Label="Client Name" Required="true" For="() => _clientModel.Name" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Business" />
+            <MudTextField @bind-Value="_clientModel.Address" Label="Address" Required="true" For="() => _clientModel.Address" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.LocationOn" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="!_success" Variant="Variant.Filled">Create Client</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    private MudForm _form;
+    private bool _success;
+    private ClientModel _clientModel = new();
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(_clientModel));
+    private void Cancel() => MudDialog.Cancel();
+
+    public class ClientModel
+    {
+        [Required]
+        public string Name { get; set; }
+
+        [Required]
+        public string Address { get; set; }
+    }
+}

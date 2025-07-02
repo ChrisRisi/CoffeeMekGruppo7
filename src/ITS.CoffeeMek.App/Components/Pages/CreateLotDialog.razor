@@ -1,0 +1,86 @@
+@using ITS.CoffeeMek.Models
+@using System.ComponentModel.DataAnnotations
+@using ITS.CoffeeMek.App.Services.Interfaces
+
+@inject ISiteService SiteService
+
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.AddCircle" Class="mr-2" /> Create Lot
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_success" Class="mt-4">
+            <MudSelect T="int?" Label="Site" @bind-Value="_lotModel.SiteId" For="() => _lotModel.SiteId" Required="true">
+                @foreach (var site in _sites)
+                {
+                    <MudSelectItem T="int?" Value="@site.Id">@site.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudNumericField T="int?" Label="Lot Capacity" @bind-Value="_lotModel.Capacity"
+                             For="() => _lotModel.Capacity" Required="true" Min="50" Step="50" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="!_success">Create Lot</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private MudForm _form = default!;
+    private bool _success;
+    private CreateLotModel _lotModel = new();
+    private IEnumerable<Site> _sites = new List<Site>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetSitesAsync() ?? new List<Site>();
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (_success)
+        {
+            var newLot = new Lot
+            {
+                OrderId = null,
+                SiteId = _lotModel.SiteId.Value,
+                Capacity = _lotModel.Capacity.Value,
+                CurrentQuantity = 0,
+                StartTimeStamp = DateTime.UtcNow,
+                EndTimeStamp = null,
+                Code = $"LOT-{_lotModel.SiteId.Value}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+            };
+            MudDialog.Close(DialogResult.Ok(newLot));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    public class CreateLotModel
+    {
+        [Required(ErrorMessage = "Site is required.")]
+        public int? SiteId { get; set; }
+
+        [Required(ErrorMessage = "Capacity is required.")]
+        [Range(50, int.MaxValue, ErrorMessage = "Capacity must be at least 50.")]
+        [MustBeMultipleOf50(ErrorMessage = "Capacity must be a multiple of 50.")]
+        public int? Capacity { get; set; }
+    }
+
+    public class MustBeMultipleOf50Attribute : ValidationAttribute
+    {
+        protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+        {
+            if (value is int quantity && quantity % 50 == 0) return ValidationResult.Success;
+            return new ValidationResult(ErrorMessage ?? "The value must be a multiple of 50.");
+        }
+    }
+}
